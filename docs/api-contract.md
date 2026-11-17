@@ -3,8 +3,9 @@
 > **⚠️ DRAFT – needs review by backend owner (Fanyi)**
 >
 > This is a proposed contract so frontend and backend work can proceed in parallel.
-> Nothing here is final until the backend owner signs off. See
-> [Open questions for backend owner](#open-questions-for-backend-owner) at the end.
+> The decisions in [Proposed decisions](#proposed-decisions-accepted-unless-backend-owner-objects)
+> at the end are **accepted unless the backend owner objects**, and the rest of this
+> document already reflects them.
 
 SplitMate is a shared-expense tracker. Backend: FastAPI. Frontend: React.
 
@@ -14,7 +15,7 @@ SplitMate is a shared-expense tracker. Backend: FastAPI. Frontend: React.
 
 ### 1.1 Base path and format
 - All endpoints are prefixed with `/api`.
-- Request and response bodies are JSON (`Content-Type: application/json`).
+- Request and response bodies are JSON (`Content-Type: application/json`). This includes login (no OAuth2 form encoding).
 
 ### 1.2 Authentication
 - JWT bearer token sent in the header:
@@ -22,42 +23,78 @@ SplitMate is a shared-expense tracker. Backend: FastAPI. Frontend: React.
   Authorization: Bearer <token>
   ```
 - Tokens are obtained from `POST /api/auth/login`.
-- Tokens are short-lived: **60 minutes** (`expires_in: 3600`).
+- JWT details:
+  - Algorithm: **HS256**
+  - `sub` claim: the user's id **as a string** (e.g. `"1"`)
+  - Lifetime: **60 minutes** (`expires_in: 3600`)
 - **No refresh token.** When the token expires, the API returns `401` and the client must log in again.
+- A validly signed token whose user no longer exists → `401`.
 
 ### 1.3 Money
-- Money is always sent and returned as a **decimal string with exactly 2 decimal places**, e.g. `"12.34"`. Never a JSON number/float.
+- Money is always returned as a **decimal string with exactly 2 decimal places**, e.g. `"12.34"`. Never a JSON number/float.
+- Clients send money as a string. Accepted input: `"12"`, `"12.3"`, `"12.30"`, all normalized to `"12.30"`.
+  - More than 2 decimal places (e.g. `"12.345"`) → `422`.
+  - Amount must be > `"0.00"`; otherwise `422`.
+  - Maximum: `"99999999.99"`; above that → `422`.
 - Backend stores money as `NUMERIC(12,2)`.
 - Splits are computed in **integer cents**. Total cents are divided evenly among participants; any **leftover cents are assigned one each to participants in ascending `user_id` order**.
   - Example: `"100.00"` split among users `1, 2, 3` → 10000 cents / 3 = 3333 r 1 → user 1: `"33.34"`, user 2: `"33.33"`, user 3: `"33.33"`.
 - The shares of an expense always sum exactly to the expense amount.
 
 ### 1.4 Dates and times
-- Dates: `"YYYY-MM-DD"` (e.g. `"2026-11-17"`).
+- Dates: `"YYYY-MM-DD"` (e.g. `"2026-11-17"`). Malformed dates → `422`.
 - Timestamps: ISO 8601 in UTC (e.g. `"2026-11-17T18:30:00Z"`).
 
 ### 1.5 Errors
-All errors use this body:
+**Every** error, including validation errors, uses this body with a **string** `detail`:
 ```json
 { "detail": "Human-readable message" }
 ```
+The backend overrides FastAPI's default validation handler (which would otherwise return `detail` as a list). The frontend still tolerates the list shape defensively.
 
 | Status | Meaning |
 |--------|---------|
-| 400 | Bad input (semantically invalid, e.g. payer not a member, from == to) |
-| 401 | Missing, invalid, or expired token; or wrong login credentials |
-| 403 | Authenticated, but not a member of the group |
-| 404 | Resource not found |
-| 409 | Conflict (e.g. email already registered, already a member) |
-| 422 | Validation error (malformed body, wrong types, missing fields) |
+| 400 | Business rule that needs the database: payer/participant/settlement user is not a group member; `from_user_id == to_user_id` |
+| 401 | Missing, invalid, or expired token; token for a non-existent user; wrong login credentials |
+| 403 | Group exists, but the caller is not a member |
+| 404 | Resource not found (e.g. group does not exist, unknown join code) |
+| 409 | Conflict: email already registered; already a member of the group |
+| 422 | Anything Pydantic can check on its own: missing/wrong-typed fields, amount ≤ 0 or malformed, unknown category, bad date, duplicate `participant_ids`, field-length violations |
 
 ### 1.6 Group access control
-**Every `/api/groups/{group_id}/...` endpoint (and `GET /api/groups/{group_id}`) returns `403` if the caller is not a member of that group.**
+For every `/api/groups/{group_id}` and `/api/groups/{group_id}/...` endpoint, checks run in this order:
+1. No/invalid token → `401`
+2. Group does not exist → `404`
+3. Group exists but caller is not a member → `403`
 
 ### 1.7 Categories (fixed enum)
 ```
 rent | utilities | groceries | transport | dining | entertainment | other
 ```
+
+### 1.8 IDs
+All IDs (`user_id`, `group_id`, expense and settlement `id`) are **integers**.
+
+### 1.9 Field constraints
+| Field | Constraint |
+|-------|------------|
+| `email` | Valid email; **trimmed and lowercased** before storing/comparing |
+| `password` | Min 8 characters |
+| `display_name` | 1–30 characters |
+| group `name` | 1–50 characters |
+| `note` | Optional, max 200 characters; returned as `null` when absent |
+| `join_code` | 8 characters, uppercase `A–Z` and `0–9` |
+
+Violations → `422`.
+
+### 1.10 List ordering
+"Newest first" lists (expenses, settlements) are sorted by **`date` desc, then `created_at` desc, then `id` desc**.
+
+### 1.11 Out of scope for v1
+- Editing or deleting expenses or settlements
+- Leaving a group or removing members
+- Regenerating join codes
+- Pagination (all lists return every matching item)
 
 ---
 
@@ -106,6 +143,8 @@ rent | utilities | groceries | transport | dining | entertainment | other
   ]
 }
 ```
+- `created_by` is the member who recorded the expense; it may differ from `payer_id`.
+- `shares` lists only participants, sorted by `user_id`. The payer is not required to be a participant.
 
 **Settlement**
 ```json
@@ -115,7 +154,7 @@ rent | utilities | groceries | transport | dining | entertainment | other
   "to_user_id": 1,
   "amount": "33.33",
   "date": "2026-11-16",
-  "note": "e-transfer",
+  "note": null,
   "created_at": "2026-11-16T14:20:00Z"
 }
 ```
@@ -134,7 +173,7 @@ rent | utilities | groceries | transport | dining | entertainment | other
   ```json
   { "status": "ok", "replica": "splitmate-api-2" }
   ```
-  `replica` is the hostname of the backend instance that served the request (useful for verifying load balancing).
+  `replica` is the hostname of the backend container that served the request. It is intentionally exposed because it is the required demo evidence for load balancing.
 - **Errors:** none expected.
 
 ---
@@ -145,22 +184,26 @@ rent | utilities | groceries | transport | dining | entertainment | other
 - **Auth:** No
 - **Request body:**
   ```json
-  { "email": "alice@example.com", "password": "s3cret-pass", "display_name": "Alice" }
+  { "email": "Alice@Example.com ", "password": "s3cret-pass", "display_name": "Alice" }
   ```
+  - `email`: trimmed and lowercased by the server.
+  - `password`: min 8 characters.
+  - `display_name`: 1–30 characters.
 - **Response 201:** User
   ```json
   { "id": 1, "email": "alice@example.com", "display_name": "Alice" }
   ```
 - **Errors:**
-  - `409` – email already registered
-  - `422` – missing fields, invalid email format
+  - `409` – email already registered (compared after trim + lowercase)
+  - `422` – missing fields, invalid email, password too short, display_name length out of range
 
 #### `POST /api/auth/login`
 - **Auth:** No
-- **Request body:**
+- **Request body (JSON, not form-encoded):**
   ```json
   { "email": "alice@example.com", "password": "s3cret-pass" }
   ```
+  `email` is trimmed and lowercased before lookup.
 - **Response 200:**
   ```json
   { "access_token": "eyJhbGciOi...", "token_type": "bearer", "expires_in": 3600 }
@@ -178,7 +221,7 @@ rent | utilities | groceries | transport | dining | entertainment | other
   { "id": 1, "email": "alice@example.com", "display_name": "Alice" }
   ```
 - **Errors:**
-  - `401` – missing/invalid/expired token
+  - `401` – missing/invalid/expired token, or the token's user no longer exists
 
 ---
 
@@ -200,33 +243,35 @@ List groups the caller belongs to.
   - `401` – missing/invalid token
 
 #### `POST /api/groups`
-Create a group. The caller automatically becomes its first member.
+Create a group. The caller automatically becomes its first member. The server generates a unique 8-character join code (`A–Z`, `0–9`).
 - **Auth:** Yes
 - **Request body:**
   ```json
   { "name": "Apartment 4B" }
   ```
+  `name`: 1–50 characters.
 - **Response 201:**
   ```json
-  { "id": 10, "name": "Apartment 4B", "join_code": "K7Q2ZP", "created_at": "2026-11-17T18:30:00Z" }
+  { "id": 10, "name": "Apartment 4B", "join_code": "K7Q2ZP4M", "created_at": "2026-11-17T18:30:00Z" }
   ```
 - **Errors:**
   - `401` – missing/invalid token
-  - `422` – missing/empty name
+  - `422` – missing name, or name length out of range
 
 #### `POST /api/groups/join`
 Join an existing group using its join code.
 - **Auth:** Yes
 - **Request body:**
   ```json
-  { "join_code": "K7Q2ZP" }
+  { "join_code": "k7q2zp4m" }
   ```
+  Input is **case-insensitive**; the server uppercases it before lookup.
 - **Response 200:** Group (same shape as `GET /api/groups/{group_id}`)
   ```json
   {
     "id": 10,
     "name": "Apartment 4B",
-    "join_code": "K7Q2ZP",
+    "join_code": "K7Q2ZP4M",
     "members": [
       { "user_id": 1, "display_name": "Alice" },
       { "user_id": 2, "display_name": "Bob" }
@@ -242,12 +287,12 @@ Join an existing group using its join code.
 #### `GET /api/groups/{group_id}`
 - **Auth:** Yes (member)
 - **Request body:** none
-- **Response 200:**
+- **Response 200:** The join code is visible to all members.
   ```json
   {
     "id": 10,
     "name": "Apartment 4B",
-    "join_code": "K7Q2ZP",
+    "join_code": "K7Q2ZP4M",
     "members": [
       { "user_id": 1, "display_name": "Alice" },
       { "user_id": 2, "display_name": "Bob" },
@@ -255,29 +300,47 @@ Join an existing group using its join code.
     ]
   }
   ```
+  `members` is sorted by `user_id`.
 - **Errors:**
   - `401` – missing/invalid token
-  - `403` – caller is not a member
   - `404` – group does not exist
+  - `403` – group exists but caller is not a member
 
 ---
 
 ### 4.4 Expenses
 
 #### `GET /api/groups/{group_id}/expenses`
-List expenses in a group, **newest first**.
+List expenses in a group, newest first (`date` desc, `created_at` desc, `id` desc). No pagination.
 - **Auth:** Yes (member)
 - **Query parameters (all optional):**
   | Param | Format | Meaning |
   |-------|--------|---------|
-  | `from` | `YYYY-MM-DD` | Only expenses with `date >= from` |
-  | `to` | `YYYY-MM-DD` | Only expenses with `date <= to` |
+  | `from` | `YYYY-MM-DD` | Only expenses with `date >= from` (inclusive) |
+  | `to` | `YYYY-MM-DD` | Only expenses with `date <= to` (inclusive) |
   | `category` | category enum | Only expenses in this category |
+
+  - `from > to` → `200` with an empty list `[]` (not an error).
+  - Unknown `category` → `422`.
 
   Example: `GET /api/groups/10/expenses?from=2026-11-01&to=2026-11-30&category=groceries`
 - **Response 200:** array of Expense
   ```json
   [
+    {
+      "id": 43,
+      "amount": "60.00",
+      "payer_id": 3,
+      "category": "dining",
+      "date": "2026-11-15",
+      "note": null,
+      "created_by": 1,
+      "created_at": "2026-11-15T23:10:00Z",
+      "shares": [
+        { "user_id": 1, "amount": "30.00" },
+        { "user_id": 2, "amount": "30.00" }
+      ]
+    },
     {
       "id": 42,
       "amount": "100.00",
@@ -295,10 +358,11 @@ List expenses in a group, **newest first**.
     }
   ]
   ```
+  In expense 43, Alice (user 1) recorded a dinner that Carol (user 3) paid for but did not eat. Carol is the payer but not a participant.
 - **Errors:**
   - `401` – missing/invalid token
-  - `403` – caller is not a member
   - `404` – group does not exist
+  - `403` – caller is not a member
   - `422` – malformed date or unknown category
 
 #### `POST /api/groups/{group_id}/expenses`
@@ -307,7 +371,7 @@ Record an expense, split evenly among participants (see §1.3).
 - **Request body:**
   ```json
   {
-    "amount": "100.00",
+    "amount": "100",
     "payer_id": 1,
     "participant_ids": [1, 2, 3],
     "category": "groceries",
@@ -315,20 +379,19 @@ Record an expense, split evenly among participants (see §1.3).
     "note": "Costco run"
   }
   ```
-  `note` is optional.
+  `note` is optional (max 200 chars). `amount` is normalized, so `"100"` is stored and returned as `"100.00"`.
 - **Rules:**
-  - `amount` > `"0.00"`.
-  - `payer_id` must be a group member.
-  - `participant_ids` must contain at least one user, all of whom are group members.
-  - `category` must be one of the enum values.
+  - Any member may record an expense with **any member** as payer.
+  - The payer does **not** have to be in `participant_ids`.
+  - `participant_ids` must be non-empty and contain no duplicates.
   - `created_by` is set by the server to the caller.
 - **Response 201:** Expense (see example in §3).
 - **Errors:**
-  - `400` – payer or a participant is not a group member; amount ≤ 0
+  - `400` – payer or a participant is not a member of this group
   - `401` – missing/invalid token
-  - `403` – caller is not a member
   - `404` – group does not exist
-  - `422` – missing fields, wrong types, empty `participant_ids`, bad date, unknown category, malformed amount
+  - `403` – caller is not a member
+  - `422` – missing fields or wrong types; amount ≤ 0, more than 2 decimals, or above `"99999999.99"`; empty or duplicate `participant_ids`; unknown category; bad date; note over 200 chars
 
 ---
 
@@ -342,8 +405,15 @@ Net position of each member, accounting for all expenses and settlements.
   - `net > 0` → this member should **receive** money.
   - `net < 0` → this member **owes** money.
   - The sum of all `net` values is exactly `"0.00"`.
-  - Proposed computation: `net = (total paid as payer) − (total of own shares) + (settlements paid as from_user) − (settlements received as to_user)`.
-- **Response 200:**
+  - **Every** member is included, even with `net = "0.00"`. Sorted by `user_id`.
+  - Formula:
+    ```
+    net = (sum paid as payer)
+        − (sum of own shares)
+        + (settlements sent as from_user)
+        − (settlements received as to_user)
+    ```
+- **Example:** using only expense 42 from §4.4 (Alice paid $100.00, split 3 ways), with no settlements yet:
   ```json
   [
     { "user_id": 1, "display_name": "Alice", "net": "66.66" },
@@ -351,17 +421,19 @@ Net position of each member, accounting for all expenses and settlements.
     { "user_id": 3, "display_name": "Carol", "net": "-33.33" }
   ]
   ```
+  Alice: 100.00 − 33.34 = 66.66. Bob and Carol: 0 − 33.33 = −33.33.
+  If Bob then records a settlement of `"33.33"` to Alice: Bob → `"0.00"`, Alice → `"33.33"`, Carol unchanged.
 - **Errors:**
   - `401` – missing/invalid token
-  - `403` – caller is not a member
   - `404` – group does not exist
+  - `403` – caller is not a member
 
 ---
 
 ### 4.6 Settlements
 
 #### `GET /api/groups/{group_id}/settlements`
-List settlements (payments between members), **newest first**.
+List settlements (payments between members), newest first (`date` desc, `created_at` desc, `id` desc). No pagination.
 - **Auth:** Yes (member)
 - **Request body:** none
 - **Response 200:** array of Settlement
@@ -380,8 +452,8 @@ List settlements (payments between members), **newest first**.
   ```
 - **Errors:**
   - `401` – missing/invalid token
-  - `403` – caller is not a member
   - `404` – group does not exist
+  - `403` – caller is not a member
 
 #### `POST /api/groups/{group_id}/settlements`
 Record that one member paid another.
@@ -390,40 +462,40 @@ Record that one member paid another.
   ```json
   { "from_user_id": 2, "to_user_id": 1, "amount": "33.33", "date": "2026-11-16", "note": "e-transfer" }
   ```
-  `note` is optional.
+  `note` is optional (max 200 chars).
 - **Rules:**
+  - Any member may record a settlement between **any two members** (not just themselves).
   - `from_user_id != to_user_id`.
-  - Both users must be group members.
-  - `amount` > `"0.00"`.
+  - **Overpaying is allowed.** The amount may exceed what `from_user` currently owes, and the balances may flip sign.
 - **Response 201:** Settlement (see example in §3).
 - **Errors:**
-  - `400` – from == to; either user is not a member; amount ≤ 0
+  - `400` – `from_user_id == to_user_id`; either user is not a member of this group
   - `401` – missing/invalid token
-  - `403` – caller is not a member
   - `404` – group does not exist
-  - `422` – missing fields, wrong types, bad date, malformed amount
+  - `403` – caller is not a member
+  - `422` – missing fields or wrong types; amount ≤ 0, more than 2 decimals, or above `"99999999.99"`; bad date; note over 200 chars
 
 ---
 
-## Open questions for backend owner
+## Proposed decisions (accepted unless backend owner objects)
 
-1. **422 error format vs. `{"detail": "message"}`.** FastAPI's default 422 response has `detail` as a *list* of objects (`[{loc, msg, type}]`), not a string. Should we override the validation handler so every error has a string `detail`, or should the frontend handle both shapes?
-2. **400 vs. 422 boundary.** Which errors are 400 and which are 422? This draft uses 422 for schema/type problems (Pydantic) and 400 for business rules (non-member payer, from == to). Is `amount <= 0` a 400 or a 422?
-3. **Login body format.** Is login JSON (`{email, password}`) as drafted here, or form-encoded via `OAuth2PasswordRequestForm` (which uses `username` instead of `email`)?
-4. **Non-existent group: 403 or 404?** If `group_id` doesn't exist, do we return 404, or 403 for everything so non-members can't probe which group IDs exist?
-5. **Joining a group you're already in.** Return `409` (as drafted), or `200` with the group (idempotent)? And is the join response `200` or `201`?
-6. **Join code details.** What format and length, is it case-sensitive, is it unique, and can it be regenerated? Should every member be able to see it via `GET /api/groups/{group_id}`?
-7. **Money input strictness.** Must `amount` have exactly two decimals (`"12.30"`), or is `"12.3"` / `"12"` accepted and normalized? What is the maximum (NUMERIC(12,2) allows up to `9999999999.99`)? Is a JSON number rejected with 422?
-8. **Duplicate or odd participants.** Is a duplicate in `participant_ids` (e.g. `[1, 1, 2]`) a 400/422 or silently de-duplicated? Is it allowed for the payer *not* to be a participant (paying on behalf of others)?
-9. **Who can record what.** Can any member create an expense with *another* member as payer, or record a settlement between two *other* members? (This draft allows both.)
-10. **Edit/delete.** There are no endpoints to edit or delete expenses or settlements, or to leave a group or remove a member. Are these out of scope for v1?
-11. **Ordering ties.** "Newest first" sorts by `date` descending, but what is the tie-breaker for items on the same date: `created_at` descending, then `id` descending?
-12. **Filter edge cases.** Are `from` and `to` inclusive (as drafted)? What happens if `from > to`: an empty list, or 400? Does an unknown `category` return 422, or an empty list?
-13. **Pagination.** Expense and settlement lists aren't paginated. Is that acceptable for v1, or should we add `limit`/`offset` now?
-14. **Balances details.** Are members with `net = "0.00"` included (as drafted)? What is the sort order (by `user_id`)? Please confirm the sign convention for settlements in the net formula in §4.5.
-15. **Overpaying a settlement.** Can a settlement be larger than what `from_user` currently owes (flipping the balance sign), or is that a 400?
-16. **IDs.** Are IDs integers (as drafted) or UUIDs? This affects the "leftover cents in ascending `user_id`" rule.
-17. **Field constraints.** What are the max lengths for `name`, `display_name`, and `note`? What is the minimum password length? Are emails normalized to lowercase so `Alice@x.com` and `alice@x.com` conflict?
-18. **`note` when absent.** Is it returned as `null` or `""`?
-19. **JWT details.** What claim holds the user ID (`sub`)? What is the signing algorithm (HS256)? Is a token for a deleted user rejected with 401?
-20. **`replica` in health.** Is it OK to expose the container hostname publicly, or should it be hidden or only enabled in non-prod?
+1. Override FastAPI's validation handler so every error has a STRING "detail". (Frontend will still tolerate the list shape defensively.)
+2. 422 = anything Pydantic can check on its own (missing/wrong type, amount <= 0, bad category, bad date). 400 = rules that need the database (payer/participant not a member, from == to).
+3. Login is JSON {email, password}, not OAuth2 form.
+4. Group does not exist -> 404. Group exists but caller is not a member -> 403.
+5. Joining a group you are already in -> 409. Successful join -> 200.
+6. Join code: 8 chars, uppercase A-Z and 0-9, unique, input is case-insensitive, not regenerable in v1, visible to all members.
+7. Frontend always sends amount as a string. Accept "12", "12.3", "12.30" and normalize to 2 decimals; more than 2 decimals -> 422. Max "99999999.99".
+8. Duplicate participant_ids -> 422. Payer does NOT have to be a participant.
+9. Any member may record an expense with any member as payer, and a settlement between any two members.
+10. Edit/delete expenses or settlements, leaving a group, removing members: out of scope for v1.
+11. Sort: date desc, then created_at desc, then id desc.
+12. from/to are inclusive. from > to -> empty list. Unknown category -> 422.
+13. No pagination in v1.
+14. Include members with net "0.00". Sort by user_id. Formula: net = (sum paid as payer) - (sum of own shares) + (settlements sent as from_user) - (settlements received as to_user).
+15. Overpaying is allowed (balance may flip sign); no 400.
+16. IDs are integers.
+17. Group name 1-50 chars, display_name 1-30, note max 200, password min 8. Emails are trimmed and lowercased; duplicates -> 409.
+18. Absent note is returned as null.
+19. JWT: HS256, "sub" = user id as string, 60 min expiry. Token for a non-existent user -> 401.
+20. Exposing the container hostname in /api/health is fine — it is required demo evidence for load balancing.
