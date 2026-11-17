@@ -10,6 +10,7 @@ The API contract lives in [`docs/api-contract.md`](../docs/api-contract.md). It 
 - npm (comes with Node)
 
 ```bash
+nvm use          # picks up .nvmrc (Node 22), if you use nvm
 node --version   # v22.12.0 or newer
 ```
 
@@ -32,7 +33,7 @@ Open **http://localhost:5173**.
 
 ### Seed data
 
-All seed users have the password **`password123`**.
+All seed users have the password **`password123`**. In mock mode the login page shows these accounts too; click one to fill in the form.
 
 | User | Email | Groups |
 |------|-------|--------|

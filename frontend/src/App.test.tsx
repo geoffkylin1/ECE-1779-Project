@@ -1,37 +1,37 @@
-import { render, screen } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import { screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import App from './App'
 import { setToken } from './api/token'
-
-function renderAt(path: string) {
-  return render(
-    <MemoryRouter initialEntries={[path]}>
-      <App />
-    </MemoryRouter>,
-  )
-}
+import { renderApp } from './test/render'
 
 describe('routing', () => {
   it('redirects protected routes to /login when logged out', () => {
-    renderAt('/groups/1')
+    const { pathname } = renderApp('/groups/1')
     expect(screen.getByRole('heading', { name: 'Log in' })).toBeInTheDocument()
+    expect(pathname()).toBe('/login')
   })
 
-  it('shows protected routes when a token is stored', () => {
+  it('shows protected routes when a token is stored', async () => {
     setToken('mock-token-1')
-    renderAt('/groups/1')
+    renderApp('/groups/1')
     expect(screen.getByRole('heading', { name: 'Group 1' })).toBeInTheDocument()
+    await screen.findByTestId('current-user') // let /auth/me settle
   })
 
-  it('sends / to /groups', () => {
+  it('sends / to /groups', async () => {
     setToken('mock-token-1')
-    renderAt('/')
+    const { pathname } = renderApp('/')
     expect(screen.getByRole('heading', { name: 'My groups' })).toBeInTheDocument()
+    expect(pathname()).toBe('/groups')
+    await screen.findByTestId('current-user')
   })
 
   it('renders /register without a token', () => {
-    renderAt('/register')
+    renderApp('/register')
     expect(screen.getByRole('heading', { name: 'Create an account' })).toBeInTheDocument()
+  })
+
+  it('shows a not-found page for unknown routes', () => {
+    renderApp('/nope')
+    expect(screen.getByRole('heading', { name: 'Page not found' })).toBeInTheDocument()
   })
 })

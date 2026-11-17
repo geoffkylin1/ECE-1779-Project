@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { AuthProvider } from './auth/AuthProvider'
 import { ProtectedRoute } from './auth/ProtectedRoute'
+import { Layout } from './components/Layout'
 import { GroupDetailPage } from './pages/GroupDetailPage'
 import { GroupsPage } from './pages/GroupsPage'
 import { LoginPage } from './pages/LoginPage'
@@ -16,8 +17,10 @@ export default function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route element={<ProtectedRoute />}>
-          <Route path="/groups" element={<GroupsPage />} />
-          <Route path="/groups/:groupId" element={<GroupDetailPage />} />
+          <Route element={<Layout />}>
+            <Route path="/groups" element={<GroupsPage />} />
+            <Route path="/groups/:groupId" element={<GroupDetailPage />} />
+          </Route>
         </Route>
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
