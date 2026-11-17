@@ -1,4 +1,4 @@
-import { useId, type InputHTMLAttributes, type ReactNode } from 'react'
+import { useId, type InputHTMLAttributes, type ReactNode, type Ref } from 'react'
 
 interface InputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'id'> {
   label: string
@@ -6,6 +6,8 @@ interface InputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'id'> {
   error?: ReactNode
   /** Helper text shown under the input when there is no error. */
   hint?: ReactNode
+  /** React 19 passes `ref` as a regular prop; it is forwarded to the <input>. */
+  ref?: Ref<HTMLInputElement>
 }
 
 /** Labelled text input with an accessible error message. */

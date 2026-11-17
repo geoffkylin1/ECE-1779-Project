@@ -1,6 +1,9 @@
 import { Link, useParams } from 'react-router-dom'
 import { ApiError } from '../api/client'
 import { getGroup } from '../api/groups'
+import { useAuth } from '../auth/useAuth'
+import { GroupDashboard } from '../components/group/GroupDashboard'
+import { YouBadge } from '../components/group/YouBadge'
 import { JoinCode } from '../components/JoinCode'
 import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
@@ -13,9 +16,10 @@ import { memberCountLabel } from '../lib/format'
 export const NOT_MEMBER_MESSAGE = 'You are not a member of this group'
 export const GROUP_NOT_FOUND_MESSAGE = 'Group not found'
 
-/** Group detail (partial): name, join code, members. Expenses etc. come next. */
+/** Group detail: header (name, join code, members), balances, forms and history. */
 export function GroupDetailPage() {
   const { groupId } = useParams()
+  const { user } = useAuth()
   const id = Number(groupId)
   const validId = Number.isInteger(id) && id > 0
 
@@ -35,7 +39,7 @@ export function GroupDetailPage() {
 
       {group ? (
         <>
-          <h1 className="text-2xl font-semibold break-words text-gray-900">{group.name}</h1>
+          <h1 className="text-2xl font-semibold break-words text-gray-900" title={group.name}>{group.name}</h1>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Card title="Join code">
@@ -45,11 +49,17 @@ export function GroupDetailPage() {
               </p>
             </Card>
 
-            <Card title={`Members (${group.members.length})`}>
-              <ul className="divide-y divide-gray-100">
+            <Card title={`Members (${group.members.length})`} className="min-w-0">
+              <ul className="divide-y divide-gray-100" aria-label="Members">
                 {group.members.map((m) => (
-                  <li key={m.user_id} className="py-2 text-gray-800 first:pt-0 last:pb-0">
-                    {m.display_name}
+                  <li
+                    key={m.user_id}
+                    className="flex min-w-0 items-center gap-2 py-2 text-gray-800 first:pt-0 last:pb-0"
+                  >
+                    <span className="truncate" title={m.display_name}>
+                      {m.display_name}
+                    </span>
+                    {m.user_id === user?.id && <YouBadge />}
                   </li>
                 ))}
               </ul>
@@ -57,9 +67,7 @@ export function GroupDetailPage() {
             </Card>
           </div>
 
-          <Card>
-            <p className="text-gray-500">Expenses, balances and settlements are coming next.</p>
-          </Card>
+          <GroupDashboard group={group} />
         </>
       ) : loading ? (
         <Spinner label="Loading group…" showLabel className="text-gray-500" />

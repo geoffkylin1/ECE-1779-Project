@@ -20,11 +20,19 @@ describe('GroupDetailPage', () => {
     expect(screen.getByTestId('join-code')).toHaveTextContent(APT.join_code)
     const membersCard = screen.getByRole('heading', { name: 'Members (3)' }).parentElement!
     expect(within(membersCard).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
-      'Alice',
+      'AliceYou', // the current user is marked "You"
       'Bob',
       'Carol',
     ])
     expect(screen.getByRole('link', { name: /Back to groups/ })).toHaveAttribute('href', '/groups')
+  })
+
+  it('marks only the current user as "You"', async () => {
+    renderDetailAs(SEED.users.bob, `/groups/${APT.id}`)
+    const members = await screen.findByRole('list', { name: 'Members' })
+    await within(members).findByText('You')
+    expect(within(members).getAllByText('You')).toHaveLength(1)
+    expect(within(members).getByText('You').parentElement).toHaveTextContent('BobYou')
   })
 
   it('Dave visiting Apartment 4B directly sees "You are not a member of this group"', async () => {
@@ -34,6 +42,9 @@ describe('GroupDetailPage', () => {
     expect(screen.queryByTestId('join-code')).not.toBeInTheDocument()
     expect(screen.queryByText(APT.join_code)).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: /Back to groups/ })).toBeInTheDocument()
+    // None of the member-only sections render.
+    expect(screen.queryByRole('heading', { name: 'Balances' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '+ Add expense' })).not.toBeInTheDocument()
   })
 
   it('shows "Group not found" for a group that does not exist', async () => {

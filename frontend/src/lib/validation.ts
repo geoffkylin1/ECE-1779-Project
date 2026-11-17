@@ -1,4 +1,5 @@
 /** Client-side form validation matching docs/api-contract.md §1.9. */
+import { isValidMoney, MAX_AMOUNT_CENTS, parseCents } from './money'
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -77,4 +78,36 @@ export function validateGroupName(name: string): string | undefined {
 /** Join codes are case-insensitive and 8 chars: strip whitespace, uppercase, cap length. */
 export function normalizeJoinCode(value: string): string {
   return value.replace(/\s+/g, '').toUpperCase().slice(0, JOIN_CODE_LENGTH)
+}
+
+// ---------- Money / expenses / settlements ----------
+
+export const NOTE_MAX = 200
+
+const AMOUNT_PATTERN = /^\d+(\.\d+)?$/
+
+/**
+ * Amount entered by a user (contract §1.3): > 0, at most 2 decimals,
+ * at most "99999999.99". Returns an error message or undefined.
+ */
+export function validateAmount(value: string): string | undefined {
+  const v = value.trim()
+  if (v === '') return 'Amount is required'
+  if (!AMOUNT_PATTERN.test(v)) return 'Enter an amount like 12.34'
+  if (!isValidMoney(v)) return 'Use at most 2 decimal places'
+  const cents = parseCents(v)
+  if (cents <= 0) return 'Amount must be greater than 0'
+  if (cents > MAX_AMOUNT_CENTS) return 'Amount must be at most 99,999,999.99'
+  return undefined
+}
+
+/** Optional note, max 200 characters after trimming (contract §1.9). */
+export function validateNote(value: string): string | undefined {
+  return value.trim().length > NOTE_MAX ? `Note must be at most ${NOTE_MAX} characters` : undefined
+}
+
+/** Trimmed note, or null when empty (the API returns null for absent notes). */
+export function normalizeNote(value: string): string | null {
+  const v = value.trim()
+  return v === '' ? null : v
 }
