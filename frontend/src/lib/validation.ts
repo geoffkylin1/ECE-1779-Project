@@ -60,3 +60,21 @@ export function validateLogin(values: LoginValues): FieldErrors<LoginValues> {
   }
   return errors
 }
+
+// ---------- Groups ----------
+
+export const GROUP_NAME_MAX = 50
+export const JOIN_CODE_LENGTH = 8
+
+/** Group name: 1–50 characters after trimming (contract §1.9). */
+export function validateGroupName(name: string): string | undefined {
+  const length = name.trim().length
+  if (length === 0) return 'Group name is required'
+  if (length > GROUP_NAME_MAX) return `Group name must be at most ${GROUP_NAME_MAX} characters`
+  return undefined
+}
+
+/** Join codes are case-insensitive and 8 chars: strip whitespace, uppercase, cap length. */
+export function normalizeJoinCode(value: string): string {
+  return value.replace(/\s+/g, '').toUpperCase().slice(0, JOIN_CODE_LENGTH)
+}

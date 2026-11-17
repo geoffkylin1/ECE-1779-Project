@@ -13,7 +13,7 @@ describe('routing', () => {
   it('shows protected routes when a token is stored', async () => {
     setToken('mock-token-1')
     renderApp('/groups/1')
-    expect(screen.getByRole('heading', { name: 'Group 1' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Apartment 4B' })).toBeInTheDocument()
     await screen.findByTestId('current-user') // let /auth/me settle
   })
 

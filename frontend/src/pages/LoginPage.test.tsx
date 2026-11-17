@@ -100,7 +100,7 @@ describe('redirect back after login', () => {
     await user.type(screen.getByLabelText('Email'), 'alice@test.com')
     await user.type(screen.getByLabelText('Password'), 'password123{Enter}')
 
-    expect(await screen.findByRole('heading', { name: 'Group 1' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Apartment 4B' })).toBeInTheDocument()
     expect(pathname()).toBe('/groups/1')
   })
 
