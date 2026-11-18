@@ -103,3 +103,69 @@ class SettlementCreate(BaseModel):
     @classmethod
     def check_date(cls, value):
         return validate_date(value)
+
+
+# Authentication request schemas
+
+from pydantic import EmailStr
+
+
+class UserRegister(BaseModel):
+    """Registration request."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    email: EmailStr
+    password: StrictStr = Field(min_length=8)
+    display_name: StrictStr = Field(min_length=1, max_length=30)
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def normalize_registration_email(cls, value):
+        if isinstance(value, str):
+            return value.strip().lower()
+        return value
+
+
+class UserLogin(BaseModel):
+    """Login request."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    email: EmailStr
+    password: StrictStr
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def normalize_login_email(cls, value):
+        if isinstance(value, str):
+            return value.strip().lower()
+        return value
+
+
+class GroupCreate(BaseModel):
+    """Request body for creating a group."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: StrictStr = Field(min_length=1, max_length=50)
+
+
+class GroupJoin(BaseModel):
+    """Request body for joining a group."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    join_code: StrictStr
+
+    @field_validator("join_code")
+    @classmethod
+    def validate_join_code(cls, value: str) -> str:
+        normalized = value.upper()
+
+        if not re.fullmatch(r"[A-Z0-9]{8}", normalized):
+            raise ValueError(
+                "Join code must be 8 letters or digits"
+            )
+
+        return normalized

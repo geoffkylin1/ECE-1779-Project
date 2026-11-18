@@ -149,3 +149,117 @@ Core endpoints planned for this module:
 - GET /api/groups/{group_id}/balances
 - GET /api/groups/{group_id}/settlements
 - POST /api/groups/{group_id}/settlements
+
+---
+
+## Complete Backend API
+
+The SplitMate backend now provides all 13 API endpoints.
+
+### Authentication
+- POST /api/auth/register
+- POST /api/auth/login
+- GET /api/auth/me
+
+Authentication uses Argon2 password hashing and JWT bearer tokens.
+
+### Group Management
+- GET /api/groups
+- POST /api/groups
+- POST /api/groups/join
+- GET /api/groups/{group_id}
+
+### Expense Management
+- GET /api/groups/{group_id}/expenses
+- POST /api/groups/{group_id}/expenses
+
+### Balances
+- GET /api/groups/{group_id}/balances
+
+### Settlements
+- GET /api/groups/{group_id}/settlements
+- POST /api/groups/{group_id}/settlements
+
+### Health Check
+- GET /api/health
+
+All group-specific financial endpoints require authentication
+and group membership.
+
+## Local Development
+
+Install dependencies:
+
+    python -m pip install -r requirements.txt
+
+Configure `.env` using `.env.example`.
+
+Required environment variables:
+- DATABASE_URL
+- JWT_SECRET_KEY
+
+Apply database migrations:
+
+    alembic upgrade head
+
+Start the FastAPI application:
+
+    python -m uvicorn src.api:app --reload --host 127.0.0.1 --port 8000
+
+Interactive API documentation:
+
+    http://127.0.0.1:8000/docs
+
+For Docker or cloud deployment, use the application entrypoint:
+
+    src.api:app
+
+Bind the server to 0.0.0.0 inside the container.
+
+## Tests
+
+Run all tests:
+
+    python -m pytest -v
+
+Tests marked as integration require a running PostgreSQL
+database configured through DATABASE_URL.
+
+Run tests without PostgreSQL integration tests:
+
+    python -m pytest -m "not integration"
+
+## Demo Data
+
+With PostgreSQL and the local FastAPI server running:
+
+    python -m scripts.seed_demo
+
+The script creates:
+- Three demo users: Alice, Bob, and Carol
+- One shared group
+- One expense with an equal split
+- One settlement
+- Sample balances
+
+Demo credentials are stored locally in a Git-ignored
+seed_credentials.*.local.json file.
+
+Do not commit demo passwords or real JWT secrets.
+
+## Integration Notes
+
+Frontend:
+- Follow docs/api-contract.md for request and response formats.
+- All protected endpoints require Authorization: Bearer <token>.
+- The API provides Swagger UI at /docs.
+
+Docker / Cloud:
+- Use src.api:app as the FastAPI entrypoint.
+- Configure DATABASE_URL and JWT_SECRET_KEY securely.
+- Run Alembic migrations before serving requests.
+- GET /api/health returns the backend replica hostname.
+
+CI/CD:
+- Run pytest for automated backend validation.
+- Integration tests require PostgreSQL.
