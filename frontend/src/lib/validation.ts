@@ -111,3 +111,11 @@ export function normalizeNote(value: string): string | null {
   const v = value.trim()
   return v === '' ? null : v
 }
+
+export const INVALID_JOIN_CODE_MESSAGE = 'Join codes are 8 letters or digits'
+const JOIN_CODE_PATTERN = /^[A-Z0-9]{8}$/
+
+/** A normalized join code must be exactly 8 of A–Z / 0–9 (contract §1.9). */
+export function isValidJoinCode(code: string): boolean {
+  return JOIN_CODE_PATTERN.test(code)
+}

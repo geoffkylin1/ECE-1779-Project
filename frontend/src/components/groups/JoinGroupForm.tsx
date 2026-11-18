@@ -4,7 +4,7 @@ import { ApiError } from '../../api/client'
 import { getGroup, joinGroup } from '../../api/groups'
 import type { GroupSummary } from '../../api/types'
 import { errorMessage } from '../../lib/errors'
-import { normalizeJoinCode } from '../../lib/validation'
+import { INVALID_JOIN_CODE_MESSAGE, isValidJoinCode, normalizeJoinCode } from '../../lib/validation'
 import { Button } from '../ui/Button'
 import { Card } from '../ui/Card'
 import { Input } from '../ui/Input'
@@ -40,6 +40,11 @@ export function JoinGroupForm({ myGroups }: { myGroups: readonly GroupSummary[] 
     event.preventDefault()
     if (code.length === 0) {
       setError('Enter a join code')
+      return
+    }
+    // The backend answers 422 for anything else; don't send it.
+    if (!isValidJoinCode(code)) {
+      setError(INVALID_JOIN_CODE_MESSAGE)
       return
     }
     setError(null)

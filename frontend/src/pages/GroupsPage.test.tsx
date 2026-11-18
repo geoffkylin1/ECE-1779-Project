@@ -8,6 +8,7 @@ import { db, SEED, tokenFor } from '../mocks/db'
 import { server } from '../mocks/node'
 import { loginAs } from '../test/helpers'
 import { renderApp } from '../test/render'
+import { INVALID_JOIN_CODE_MESSAGE } from '../lib/validation'
 import { EMPTY_GROUPS_MESSAGE } from './GroupsPage'
 
 const APT = SEED.groups.apartment
@@ -163,15 +164,41 @@ describe('Join group', () => {
     )
   })
 
-  it('shows the API detail for a 422', async () => {
+  it('shows the API detail for a 422, without Pydantic\'s "Value error, " prefix', async () => {
     server.use(
-      http.post('*/api/groups/join', () => HttpResponse.json({ detail: 'join_code is malformed' }, { status: 422 }), {
-        once: true,
-      }),
+      http.post(
+        '*/api/groups/join',
+        () => HttpResponse.json({ detail: 'Value error, Join code must be 8 letters or digits' }, { status: 422 }),
+        { once: true },
+      ),
     )
     const { user } = renderGroupsAs(SEED.users.dave)
-    await user.type(screen.getByLabelText('Join code'), 'ABC{Enter}')
-    expect(await screen.findByText('join_code is malformed')).toHaveAttribute('role', 'alert')
+    await user.type(screen.getByLabelText('Join code'), 'ABCD1234{Enter}')
+    expect(await screen.findByText('Join code must be 8 letters or digits')).toHaveAttribute('role', 'alert')
+    expect(screen.queryByText(/Value error/)).not.toBeInTheDocument()
+  })
+
+  it.each([
+    ['too short', 'ABC'],
+    ['7 characters', 'K7Q2ZP4'],
+    ['punctuation', 'K7Q2-P4M'],
+  ])('blocks a code that is not 8 letters/digits (%s) without calling the API', async (_, typed) => {
+    let called = false
+    server.use(
+      http.post('*/api/groups/join', () => {
+        called = true
+      }),
+    )
+    const { user, pathname } = renderGroupsAs(SEED.users.dave)
+    await user.type(screen.getByLabelText('Join code'), `${typed}{Enter}`)
+
+    expect(screen.getByText(INVALID_JOIN_CODE_MESSAGE)).toHaveAttribute('role', 'alert')
+    expect(called).toBe(false)
+    expect(pathname()).toBe('/groups')
+
+    // Editing clears the message.
+    await user.clear(screen.getByLabelText('Join code'))
+    expect(screen.queryByText(INVALID_JOIN_CODE_MESSAGE)).not.toBeInTheDocument()
   })
 
   it('asks for a code when submitted empty', async () => {

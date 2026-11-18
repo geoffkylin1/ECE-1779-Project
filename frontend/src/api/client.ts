@@ -117,15 +117,25 @@ async function readJson(response: Response): Promise<unknown> {
   }
 }
 
+/**
+ * Pydantic prefixes messages from custom validators with "Value error, "
+ * (e.g. "Value error, Invalid monetary amount"). Not meant for users.
+ */
+const PYDANTIC_PREFIX = /^Value error,\s*/i
+
+function cleanMessage(message: string): string {
+  return message.replace(PYDANTIC_PREFIX, '').trim()
+}
+
 /** Turn any error body into a single string (contract §1.5). */
 export function extractDetail(data: unknown, status: number): string {
   const detail = (data as Partial<ErrorResponse> | undefined)?.detail
-  if (typeof detail === 'string' && detail) {
-    return detail
+  if (typeof detail === 'string' && cleanMessage(detail)) {
+    return cleanMessage(detail)
   }
   if (Array.isArray(detail)) {
     const messages = detail
-      .map((item: Partial<ValidationErrorItem>) => item?.msg)
+      .map((item: Partial<ValidationErrorItem>) => (typeof item?.msg === 'string' ? cleanMessage(item.msg) : undefined))
       .filter((msg): msg is string => typeof msg === 'string' && msg.length > 0)
     if (messages.length > 0) {
       return messages.join('; ')

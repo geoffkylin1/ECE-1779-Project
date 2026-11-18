@@ -45,6 +45,19 @@ describe('apiRequest', () => {
     expect(err).toMatchObject({ status: 422, detail: 'Field required; Bad date' })
   })
 
+  it('strips a leading Pydantic "Value error, " from string and list details', () => {
+    expect(extractDetail({ detail: 'Value error, Invalid monetary amount' }, 422)).toBe('Invalid monetary amount')
+    expect(extractDetail({ detail: 'value error,Duplicate participant IDs' }, 422)).toBe('Duplicate participant IDs')
+    expect(extractDetail({ detail: [{ msg: 'Value error, Bad date' }, { msg: 'Field required' }] }, 422)).toBe(
+      'Bad date; Field required',
+    )
+    // Only a leading prefix is removed; other text is untouched.
+    expect(extractDetail({ detail: 'Group not found' }, 404)).toBe('Group not found')
+    expect(extractDetail({ detail: 'Amount: Value error, too big' }, 422)).toBe('Amount: Value error, too big')
+    // A detail that is only the prefix falls back to the generic message.
+    expect(extractDetail({ detail: 'Value error, ' }, 422)).toBe('Request failed with status 422')
+  })
+
   it('falls back to a generic message when the body has no detail', () => {
     expect(extractDetail(undefined, 500)).toBe('Request failed with status 500')
   })
