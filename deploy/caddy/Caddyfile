@@ -1,0 +1,13 @@
+{$SITE_ADDRESS::80} {
+	encode zstd gzip
+
+	handle /api/* {
+		reverse_proxy api:8000
+	}
+
+	# The frontend owner can replace this response with `root` and `file_server`
+	# after the React production build is added to the Caddy image or volume.
+	handle {
+		respond "SplitMate infrastructure is running. The frontend build has not been integrated yet." 200
+	}
+}
