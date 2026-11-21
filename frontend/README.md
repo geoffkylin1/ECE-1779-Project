@@ -31,6 +31,8 @@ Open **http://localhost:5173**.
 
 `.env.development` sets `VITE_USE_MOCK=true`. With it on, a [Mock Service Worker](https://mswjs.io/) starts in the browser before the app renders and answers every `/api` request from an in-memory database ([src/mocks/](src/mocks/)). The console logs `[SplitMate] Mock API enabled`.
 
+Production builds (`npm run build` with `VITE_USE_MOCK` unset) contain no mock code: the mock modules are only imported when the flag is on, and a small plugin in [vite.config.ts](vite.config.ts) removes `public/mockServiceWorker.js` from `dist/`. Check with `grep -rl mockServiceWorker dist` (no output).
+
 ### Seed data
 
 All seed users have the password **`password123`**. In mock mode the login page shows these accounts too; click one to fill in the form.
