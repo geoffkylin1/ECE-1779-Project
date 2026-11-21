@@ -48,6 +48,42 @@ docker compose down
 `docker compose down` preserves database and Caddy volumes. Do not add
 `--volumes` unless deleting local data is intentional.
 
+## Frontend
+
+The React app is built into the Caddy image by `deploy/caddy/Dockerfile`, so
+Caddy needs no bind mounts:
+
+1. A `node:22-alpine` stage runs `npm ci` and `npm run build` in `frontend/`.
+   `VITE_USE_MOCK` is unset, so the in-browser mock API is not included. The
+   build fails if any mock code or seed data appears in `dist/`.
+2. A `caddy:2-alpine` stage copies `dist/` to `/srv` and the Caddyfile to
+   `/etc/caddy/Caddyfile`.
+
+Routing in `deploy/caddy/Caddyfile`:
+
+- `/api/*` is reverse-proxied to the API. It is matched before the frontend,
+  so an unknown API path returns the backend's JSON 404, never `index.html`.
+- Everything else is served from `/srv` with an SPA fallback
+  (`try_files {path} /index.html`). Deep links such as `/groups/1` therefore
+  load `index.html` with status 200, and React Router renders the page.
+- `/assets/*` (content-hashed by Vite) is cached for a year as `immutable`.
+  It has no SPA fallback: a missing asset, such as an old hash after a deploy,
+  is a plain 404 and is not cached.
+- `index.html`, the favicon and deep links are sent with
+  `Cache-Control: no-cache`, so a deploy takes effect on the next page load.
+- Every response carries `X-Content-Type-Options`, `Referrer-Policy` and
+  `X-Frame-Options`, and the `Server` header is removed. HSTS is added only
+  over HTTPS.
+
+Build the image locally with `docker compose build caddy`. For Swarm, build and
+push it with an immutable tag:
+
+```bash
+docker build --file deploy/caddy/Dockerfile \
+  --tag ghcr.io/geoffkylin1/ece-1779-project-caddy:<git-sha> .
+docker push ghcr.io/geoffkylin1/ece-1779-project-caddy:<git-sha>
+```
+
 ## Production prerequisites
 
 1. Create Linux Droplets in one DigitalOcean VPC and install Docker Engine.
@@ -151,10 +187,11 @@ non-secret deployment settings:
 ```bash
 export DOMAIN=splitmate.example.com
 export API_IMAGE=ghcr.io/geoffkylin1/ece-1779-project:<git-sha>
+export CADDY_IMAGE=ghcr.io/geoffkylin1/ece-1779-project-caddy:<git-sha>
 ./scripts/deploy-swarm.sh
 ```
 
-The deploy script rejects `:latest`, checks that Swarm is active and all
+The deploy script rejects `:latest` for both images, checks that Swarm is active and all
 external secrets exist, and uses rolling updates with rollback on failure.
 
 Inspect the rollout:

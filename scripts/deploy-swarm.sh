@@ -3,13 +3,16 @@ set -eu
 
 : "${DOMAIN:?Set DOMAIN to the public DNS name before deploying}"
 : "${API_IMAGE:?Set API_IMAGE to an immutable registry image tag before deploying}"
+: "${CADDY_IMAGE:?Set CADDY_IMAGE to an immutable registry image tag before deploying}"
 
-case "$API_IMAGE" in
-    *:latest)
-        echo "Refusing to deploy a mutable :latest tag. Set API_IMAGE to a version or Git SHA." >&2
-        exit 1
-        ;;
-esac
+for image in "$API_IMAGE" "$CADDY_IMAGE"; do
+    case "$image" in
+        *:latest)
+            echo "Refusing to deploy a mutable :latest tag ($image). Use a version or Git SHA." >&2
+            exit 1
+            ;;
+    esac
+done
 
 swarm_state="$(docker info --format '{{.Swarm.LocalNodeState}}')"
 if [ "$swarm_state" != "active" ]; then

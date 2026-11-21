@@ -1,13 +1,46 @@
 {$SITE_ADDRESS::80} {
 	encode zstd gzip
 
-	handle /api/* {
-		reverse_proxy api:8000
+	# Security headers for every response, API included.
+	header {
+		-Server
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		X-Frame-Options DENY
 	}
 
-	# The frontend owner can replace this response with `root` and `file_server`
-	# after the React production build is added to the Caddy image or volume.
+	# HSTS only over HTTPS (production); never on the local :80 site.
+	@https protocol https
+	header @https Strict-Transport-Security "max-age=31536000"
+
+	# API first: a path-matched handle wins over the catch-all below, so an
+	# unknown /api/* path gets the backend's JSON 404, never index.html.
+	handle /api/* {
+		reverse_proxy api:8000 {
+			header_down -Server
+		}
+	}
+
+	# Vite puts content-hashed files in /assets/, so they never change.
+	# No SPA fallback here: a missing asset (e.g. an old hash after a deploy)
+	# must be a real 404, not index.html cached as immutable for a year.
+	handle /assets/* {
+		root * /srv
+		@exists file
+		header @exists Cache-Control "public, max-age=31536000, immutable"
+		file_server
+	}
+
+	# React app (built into the image at /srv).
 	handle {
-		respond "SplitMate infrastructure is running. The frontend build has not been integrated yet." 200
+		root * /srv
+
+		# index.html, favicon and deep links are revalidated on every load.
+		header Cache-Control "no-cache"
+
+		# SPA fallback: unknown paths such as /groups/1 serve index.html and
+		# React Router renders the page.
+		try_files {path} /index.html
+		file_server
 	}
 }

@@ -1,6 +1,7 @@
 services:
   caddy:
-    image: caddy:2-alpine
+    # Built from deploy/caddy/Dockerfile: Caddy plus the React build.
+    image: ${CADDY_IMAGE:?Set CADDY_IMAGE to a registry image and immutable tag}
     environment:
       SITE_ADDRESS: ${DOMAIN:?Set DOMAIN to the public DNS name}
     ports:
@@ -16,9 +17,6 @@ services:
         published: 443
         protocol: udp
         mode: ingress
-    configs:
-      - source: caddyfile
-        target: /etc/caddy/Caddyfile
     volumes:
       - caddy_data:/data
       - caddy_config:/config
@@ -123,10 +121,6 @@ services:
         reservations:
           cpus: "0.25"
           memory: 256M
-
-configs:
-  caddyfile:
-    file: ./caddy/Caddyfile
 
 secrets:
   database_url:

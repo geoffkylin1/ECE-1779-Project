@@ -13,3 +13,7 @@ htmlcov
 node_modules
 docs
 tests
+frontend/node_modules
+frontend/dist
+frontend/coverage
+frontend/.env*.local
