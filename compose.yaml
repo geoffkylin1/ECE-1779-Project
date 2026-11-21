@@ -1,0 +1,74 @@
+name: splitmate
+
+services:
+  caddy:
+    build:
+      context: .
+      dockerfile: deploy/caddy/Dockerfile
+    restart: unless-stopped
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-:80}
+    ports:
+      - "${HTTP_PORT:-8080}:80"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - edge
+
+  api:
+    build:
+      context: .
+    restart: unless-stopped
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      DEBUG: ${DEBUG:-false}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-splitmate}:${POSTGRES_PASSWORD:-splitmate_dev_password}@db:5432/${POSTGRES_DB:-splitmate}
+      JWT_SECRET: ${JWT_SECRET:-local-development-only-change-me}
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=2)"
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    networks:
+      - edge
+      - data
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-splitmate}
+      POSTGRES_USER: ${POSTGRES_USER:-splitmate}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-splitmate_dev_password}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - data
+
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:
+
+networks:
+  edge:
+  data:
+    internal: true

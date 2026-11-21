@@ -1,0 +1,147 @@
+services:
+  caddy:
+    # Built from deploy/caddy/Dockerfile: Caddy plus the React build.
+    image: ${CADDY_IMAGE:?Set CADDY_IMAGE to a registry image and immutable tag}
+    environment:
+      SITE_ADDRESS: ${DOMAIN:?Set DOMAIN to the public DNS name}
+    ports:
+      - target: 80
+        published: 80
+        protocol: tcp
+        mode: ingress
+      - target: 443
+        published: 443
+        protocol: tcp
+        mode: ingress
+      - target: 443
+        published: 443
+        protocol: udp
+        mode: ingress
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - edge
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.splitmate.caddy == true
+      update_config:
+        order: start-first
+        parallelism: 1
+        failure_action: rollback
+      restart_policy:
+        condition: on-failure
+
+  api:
+    image: ${API_IMAGE:?Set API_IMAGE to a registry image and immutable tag}
+    environment:
+      APP_ENV: production
+      DEBUG: "false"
+      DATABASE_URL_FILE: /run/secrets/database_url
+      JWT_SECRET_FILE: /run/secrets/jwt_secret
+    secrets:
+      - database_url
+      - jwt_secret
+    networks:
+      - edge
+      - data
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=2)"
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 15s
+    deploy:
+      replicas: 2
+      placement:
+        preferences:
+          - spread: node.hostname
+      update_config:
+        order: start-first
+        parallelism: 1
+        delay: 10s
+        monitor: 30s
+        failure_action: rollback
+      rollback_config:
+        order: stop-first
+        parallelism: 1
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 60s
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 512M
+        reservations:
+          cpus: "0.10"
+          memory: 128M
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: splitmate
+      POSTGRES_USER: splitmate
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
+    volumes:
+      - type: bind
+        source: /mnt/splitmate-postgres
+        target: /var/lib/postgresql/data
+    networks:
+      - data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.splitmate.database == true
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 5
+        window: 120s
+      resources:
+        limits:
+          cpus: "1.00"
+          memory: 1G
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+
+secrets:
+  database_url:
+    external: true
+    name: splitmate_database_url
+  jwt_secret:
+    external: true
+    name: splitmate_jwt_secret
+  postgres_password:
+    external: true
+    name: splitmate_postgres_password
+
+volumes:
+  caddy_data:
+  caddy_config:
+
+networks:
+  edge:
+    driver: overlay
+  data:
+    driver: overlay
+    internal: true
+    driver_opts:
+      encrypted: "true"
