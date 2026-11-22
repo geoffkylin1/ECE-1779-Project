@@ -51,3 +51,6 @@ pnpm-debug.log*
 # ===== Logs =====
 *.log
 logs/
+
+# Local demo credentials
+seed_credentials.*.local.json

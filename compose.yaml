@@ -26,8 +26,8 @@ services:
     environment:
       APP_ENV: ${APP_ENV:-development}
       DEBUG: ${DEBUG:-false}
-      DATABASE_URL: postgresql://${POSTGRES_USER:-splitmate}:${POSTGRES_PASSWORD:-splitmate_dev_password}@db:5432/${POSTGRES_DB:-splitmate}
-      JWT_SECRET: ${JWT_SECRET:-local-development-only-change-me}
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-splitmate}:${POSTGRES_PASSWORD:-splitmate_dev_password}@db:5432/${POSTGRES_DB:-splitmate}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-local-development-only-change-me}
     depends_on:
       db:
         condition: service_healthy

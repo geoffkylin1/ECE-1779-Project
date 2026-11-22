@@ -40,7 +40,7 @@ services:
       APP_ENV: production
       DEBUG: "false"
       DATABASE_URL_FILE: /run/secrets/database_url
-      JWT_SECRET_FILE: /run/secrets/jwt_secret
+      JWT_SECRET_KEY_FILE: /run/secrets/jwt_secret
     secrets:
       - database_url
       - jwt_secret

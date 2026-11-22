@@ -18,8 +18,8 @@ if [ -n "${DATABASE_URL_FILE:-}" ]; then
     load_secret DATABASE_URL "$DATABASE_URL_FILE"
 fi
 
-if [ -n "${JWT_SECRET_FILE:-}" ]; then
-    load_secret JWT_SECRET "$JWT_SECRET_FILE"
+if [ -n "${JWT_SECRET_KEY_FILE:-}" ]; then
+    load_secret JWT_SECRET_KEY "$JWT_SECRET_KEY_FILE"
 fi
 
 exec "$@"
