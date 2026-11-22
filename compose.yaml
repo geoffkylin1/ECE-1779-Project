@@ -29,8 +29,8 @@ services:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-splitmate}:${POSTGRES_PASSWORD:-splitmate_dev_password}@db:5432/${POSTGRES_DB:-splitmate}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-local-development-only-change-me}
     depends_on:
-      db:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       test:
         - CMD
@@ -44,6 +44,20 @@ services:
     networks:
       - edge
       - data
+
+  migrate:
+    build:
+      context: .
+    restart: "no"
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-splitmate}:${POSTGRES_PASSWORD:-splitmate_dev_password}@db:5432/${POSTGRES_DB:-splitmate}
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["alembic", "upgrade", "head"]
+    networks:
+      - data
+
 
   db:
     image: postgres:16-alpine
