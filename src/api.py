@@ -30,9 +30,20 @@ from src.user_service import (
 
 load_dotenv()
 
+from contextlib import asynccontextmanager
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Validate required security configuration at startup."""
+    get_jwt_secret()
+    yield
+
+
 app = FastAPI(
     title="SplitMate API",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -42,7 +53,11 @@ def get_jwt_secret() -> str:
     """Load the JWT signing secret."""
     secret = os.getenv("JWT_SECRET_KEY")
 
-    if not secret or len(secret) < 32:
+    if (
+        not secret
+        or len(secret) < 32
+        or secret == "replace-with-a-secure-random-secret"
+    ):
         raise RuntimeError(
             "JWT_SECRET_KEY must be configured securely"
         )
@@ -103,7 +118,7 @@ async def validation_error_handler(request, exc):
 
     return JSONResponse(
         status_code=422,
-        content={"detail": str(message)},
+        content={"detail": str(message).removeprefix("Value error, ")},
     )
 
 
@@ -205,7 +220,14 @@ def api_create_group(
         name=data.name,
     )
 
-    return get_group(db, group.id, current_user.id)
+    result = get_group(db, group.id, current_user.id)
+    from datetime import timezone
+    result["created_at"] = (
+        group.created_at.astimezone(timezone.utc)
+        .isoformat()
+        .replace("+00:00", "Z")
+    )
+    return result
 
 
 @app.post("/api/groups/join")

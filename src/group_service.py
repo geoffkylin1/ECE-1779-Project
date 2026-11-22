@@ -128,6 +128,7 @@ def list_groups(db: Session, user_id: int) -> list[dict]:
         results.append({
             "id": group.id,
             "name": group.name,
+            "join_code": group.join_code,
             "member_count": count,
         })
 
