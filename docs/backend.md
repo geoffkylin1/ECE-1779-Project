@@ -288,4 +288,3 @@ maintained separately by the respective team members.
 - Services currently manage their own commits and rollbacks.
 - Full deployment and failure-recovery validation are part
   of team integration.
-
