@@ -91,10 +91,10 @@ jobs:
         run: npm run build
 
     containers:
-      name: Container build
-      runs-on: ubuntu-latest
-      env:
-        JWT_SECRET_KEY: splitmate-ci-jwt-secret-12345678901234567890
+    name: Container build
+    runs-on: ubuntu-latest
+    env:
+      JWT_SECRET_KEY: splitmate-ci-jwt-secret-12345678901234567890
 
     steps:
       - name: Check out repository
