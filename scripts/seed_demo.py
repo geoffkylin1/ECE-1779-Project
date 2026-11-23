@@ -9,7 +9,7 @@ from pathlib import Path
 from uuid import uuid4
 
 
-BASE_URL = "http://127.0.0.1:8080"
+BASE_URL = "http://127.0.0.1:8000"
 SUFFIX = uuid4().hex[:8]
 PASSWORDS_FILE = Path(
     f"seed_credentials.{SUFFIX}.local.json"

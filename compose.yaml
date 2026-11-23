@@ -27,7 +27,7 @@ services:
       APP_ENV: ${APP_ENV:-development}
       DEBUG: ${DEBUG:-false}
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-splitmate}:${POSTGRES_PASSWORD:-splitmate_dev_password}@db:5432/${POSTGRES_DB:-splitmate}
-      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-local-development-only-change-me}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?set JWT_SECRET_KEY}
     depends_on:
       migrate:
         condition: service_completed_successfully
