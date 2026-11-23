@@ -90,7 +90,7 @@ jobs:
       - name: Build frontend
         run: npm run build
 
-    containers:
+  containers:
     name: Container build
     runs-on: ubuntu-latest
     env:
