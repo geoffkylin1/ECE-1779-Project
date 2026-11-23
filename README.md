@@ -62,6 +62,19 @@ Follow [the infrastructure runbook](docs/infrastructure.md). It covers Swarm
 ports and initialization, the DigitalOcean Volume, node labels, external
 secrets, Caddy HTTPS, deployment, and the required failure/persistence demos.
 
+## Monitoring and resilience
+
+The local Docker Swarm test stack includes two API replicas and a complete
+monitoring path using Blackbox Exporter, Prometheus, Alertmanager, and Grafana.
+
+The monitoring dashboard displays application health, HTTP status, recent
+availability, and health-check response time. Prometheus triggers a critical
+alert when the application health endpoint remains unavailable for 20 seconds.
+
+Follow the [monitoring and resilience runbook](docs/monitoring.md) for local
+deployment, dashboard access, alert testing, API failure recovery, and database
+persistence verification.
+
 ## Collaboration
 
 Do not push directly to `main`. Create a `feature/`, `fix/`, `docs/`, or
