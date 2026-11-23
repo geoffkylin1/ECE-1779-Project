@@ -84,6 +84,27 @@ services:
           cpus: "0.10"
           memory: 128M
 
+  migrate:
+    image: ${API_IMAGE:?Set API_IMAGE to a registry image and immutable tag}
+    environment:
+      DATABASE_URL_FILE: /run/secrets/database_url
+    secrets:
+      - database_url
+    command:
+      - /bin/sh
+      - -c
+      - |
+        until alembic upgrade head; do
+          echo "Waiting for PostgreSQL before migration..."
+          sleep 2
+        done
+    networks:
+      - data
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: none
+
   db:
     image: postgres:16-alpine
     environment:
@@ -143,5 +164,3 @@ networks:
   data:
     driver: overlay
     internal: true
-    driver_opts:
-      encrypted: "true"

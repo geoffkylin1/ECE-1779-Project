@@ -42,15 +42,28 @@ The monitoring services are included in:
 deploy/swarm-local.yaml
 ```
 
-The stack requires an external Grafana administrator password secret. Create it
-with a temporary file:
+The stack requires four external secrets. Create them with temporary files:
 
 ```powershell
-$secretFile = Join-Path $env:TEMP ("splitmate-grafana-" + [Guid]::NewGuid().ToString("N") + ".txt")
-$password = [Guid]::NewGuid().ToString("N") + [Guid]::NewGuid().ToString("N")
-[IO.File]::WriteAllText($secretFile, $password)
-docker secret create splitmate_local_grafana_admin_password $secretFile
-Remove-Item -Force $secretFile
+$secretDir = Join-Path $env:TEMP ("splitmate-secrets-" + [Guid]::NewGuid().ToString("N"))
+New-Item -ItemType Directory -Path $secretDir | Out-Null
+
+$dbPassword = [Guid]::NewGuid().ToString("N") + [Guid]::NewGuid().ToString("N")
+$jwtSecret = [Guid]::NewGuid().ToString("N") + [Guid]::NewGuid().ToString("N")
+$grafanaPassword = [Guid]::NewGuid().ToString("N") + [Guid]::NewGuid().ToString("N")
+$databaseUrl = "postgresql+psycopg://splitmate:$dbPassword@db:5432/splitmate"
+
+[IO.File]::WriteAllText((Join-Path $secretDir "postgres_password"), $dbPassword)
+[IO.File]::WriteAllText((Join-Path $secretDir "database_url"), $databaseUrl)
+[IO.File]::WriteAllText((Join-Path $secretDir "jwt_secret"), $jwtSecret)
+[IO.File]::WriteAllText((Join-Path $secretDir "grafana_password"), $grafanaPassword)
+
+docker secret create splitmate_local_postgres_password (Join-Path $secretDir "postgres_password")
+docker secret create splitmate_local_database_url (Join-Path $secretDir "database_url")
+docker secret create splitmate_local_jwt_secret (Join-Path $secretDir "jwt_secret")
+docker secret create splitmate_local_grafana_admin_password (Join-Path $secretDir "grafana_password")
+
+Remove-Item -Recurse -Force $secretDir
 ```
 
 Validate and deploy the stack:

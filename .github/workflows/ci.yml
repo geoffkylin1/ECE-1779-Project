@@ -104,5 +104,12 @@ jobs:
       - name: Validate Swarm monitoring configuration
         run: docker stack config -c deploy/swarm-local.yaml > /dev/null
 
+      - name: Validate production Swarm configuration
+        env:
+          DOMAIN: splitmate.example.com
+          API_IMAGE: ghcr.io/example/splitmate-api:ci
+          CADDY_IMAGE: ghcr.io/example/splitmate-caddy:ci
+        run: docker stack config -c deploy/swarm-stack.yaml > /dev/null
+
       - name: Build application containers
         run: docker compose build

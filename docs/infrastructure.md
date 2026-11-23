@@ -14,7 +14,7 @@ real credentials.
 | Database | PostgreSQL with a named volume | One PostgreSQL task pinned to the volume node |
 | Storage | Docker named volume | DigitalOcean Volume mounted at `/mnt/splitmate-postgres` |
 | Secrets | Untracked `.env` file | Docker Swarm secrets |
-| Networks | Isolated edge and internal data networks | Overlay edge and encrypted internal data networks |
+| Networks | Isolated edge and internal data networks | Overlay edge and VPC-private internal data networks |
 
 The database is intentionally a single instance because a DigitalOcean Volume
 can attach to one Droplet at a time. This is a documented single point of
@@ -92,8 +92,9 @@ docker push ghcr.io/geoffkylin1/ece-1779-project-caddy:<git-sha>
 3. Allow public inbound TCP 80 and 443 to the edge node and restrict SSH to
    administrators.
 4. Allow Swarm traffic only inside the trusted VPC: TCP 2377, TCP/UDP 7946,
-   UDP 4789, and IP protocol 50 (ESP) for encrypted overlay traffic. Never
-   expose UDP 4789 to the public internet.
+   and UDP 4789. Never expose UDP 4789 to the public internet. DigitalOcean
+   Cloud Firewalls do not support ESP allow rules, so the internal data overlay
+   relies on VPC isolation instead of Docker IPsec encryption.
 5. Point the domain's A record to a Swarm node reachable on ports 80 and 443.
 6. Publish the API image to GHCR with an immutable version or Git SHA tag.
 
@@ -115,8 +116,9 @@ docker node ls
 ## Prepare the DigitalOcean Volume
 
 Create a volume named `splitmate-postgres` in the same region as the database
-Droplet, attach it to that Droplet, and enable automatic formatting/mounting at
-creation time. The stack expects the resulting host path:
+Droplet and attach it to that Droplet. Choose manual formatting and mounting so
+the mount path exactly matches the stack. DigitalOcean automatic mounts replace
+hyphens with underscores, but the stack expects:
 
 ```text
 /mnt/splitmate-postgres
@@ -165,7 +167,7 @@ umask 077
 mkdir -p /root/splitmate-secrets
 openssl rand -hex 32 > /root/splitmate-secrets/postgres_password
 POSTGRES_PASSWORD="$(tr -d '\n' < /root/splitmate-secrets/postgres_password)"
-printf 'postgresql://splitmate:%s@db:5432/splitmate' "$POSTGRES_PASSWORD" \
+printf 'postgresql+psycopg://splitmate:%s@db:5432/splitmate' "$POSTGRES_PASSWORD" \
   > /root/splitmate-secrets/database_url
 unset POSTGRES_PASSWORD
 openssl rand -hex 32 > /root/splitmate-secrets/jwt_secret
