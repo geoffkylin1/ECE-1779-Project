@@ -101,5 +101,8 @@ jobs:
       - name: Validate Compose configuration
         run: docker compose config --quiet
 
+      - name: Validate Swarm monitoring configuration
+        run: docker stack config -c deploy/swarm-local.yaml > /dev/null
+
       - name: Build application containers
         run: docker compose build

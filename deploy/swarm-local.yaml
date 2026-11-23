@@ -116,6 +116,100 @@ services:
         max_attempts: 5
         window: 120s
 
+  blackbox:
+    image: prom/blackbox-exporter:v0.28.0
+    command:
+      - --config.file=/etc/blackbox_exporter/config.yml
+    configs:
+      - source: blackbox_config
+        target: /etc/blackbox_exporter/config.yml
+    networks:
+      - edge
+      - monitoring
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+
+  prometheus:
+    image: prom/prometheus:v3.16.0
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-lifecycle
+    configs:
+      - source: prometheus_config
+        target: /etc/prometheus/prometheus.yml
+      - source: prometheus_alerts
+        target: /etc/prometheus/alerts.yml
+    volumes:
+      - swarm_prometheus_data:/prometheus
+    ports:
+      - target: 9090
+        published: 9090
+        protocol: tcp
+        mode: ingress
+    networks:
+      - monitoring
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+
+  alertmanager:
+    image: prom/alertmanager:v0.35.0
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+    configs:
+      - source: alertmanager_config
+        target: /etc/alertmanager/alertmanager.yml
+    volumes:
+      - swarm_alertmanager_data:/alertmanager
+    ports:
+      - target: 9093
+        published: 9093
+        protocol: tcp
+        mode: ingress
+    networks:
+      - monitoring
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+
+  grafana:
+    image: grafana/grafana:13.3.0
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD__FILE: /run/secrets/grafana_admin_password
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    secrets:
+      - grafana_admin_password
+    configs:
+      - source: grafana_datasource
+        target: /etc/grafana/provisioning/datasources/prometheus.yml
+      - source: grafana_dashboard_provider
+        target: /etc/grafana/provisioning/dashboards/splitmate.yml
+      - source: grafana_dashboard
+        target: /var/lib/grafana/dashboards/splitmate.json
+    volumes:
+      - swarm_grafana_data:/var/lib/grafana
+    ports:
+      - target: 3000
+        published: 3000
+        protocol: tcp
+        mode: ingress
+    networks:
+      - monitoring
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+
 secrets:
   database_url:
     external: true
@@ -126,11 +220,33 @@ secrets:
   postgres_password:
     external: true
     name: splitmate_local_postgres_password
+  grafana_admin_password:
+    external: true
+    name: splitmate_local_grafana_admin_password
+
+configs:
+  blackbox_config:
+    file: ./monitoring/blackbox.yml
+  prometheus_config:
+    file: ./monitoring/prometheus.yml
+  prometheus_alerts:
+    file: ./monitoring/alerts.yml
+  alertmanager_config:
+    file: ./monitoring/alertmanager.yml
+  grafana_datasource:
+    file: ./monitoring/grafana-datasource.yml
+  grafana_dashboard_provider:
+    file: ./monitoring/grafana-dashboard-provider.yml
+  grafana_dashboard:
+    file: ./monitoring/splitmate-dashboard.json
 
 volumes:
   swarm_postgres_data:
   swarm_caddy_data:
   swarm_caddy_config:
+  swarm_prometheus_data:
+  swarm_alertmanager_data:
+  swarm_grafana_data:
 
 networks:
   edge:
@@ -140,3 +256,6 @@ networks:
     internal: true
     driver_opts:
       encrypted: "true"
+  monitoring:
+    driver: overlay
+    internal: true
