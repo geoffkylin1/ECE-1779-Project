@@ -1,0 +1,20 @@
+groups:
+  - name: splitmate-availability
+    rules:
+      - alert: SplitMateUnavailable
+        expr: probe_success{job="splitmate-health"} == 0
+        for: 20s
+        labels:
+          severity: critical
+        annotations:
+          summary: SplitMate is unavailable
+          description: The SplitMate health endpoint has failed for 20 seconds.
+
+      - alert: SplitMateSlowResponse
+        expr: probe_duration_seconds{job="splitmate-health"} > 2
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: SplitMate is responding slowly
+          description: The SplitMate health probe has taken more than two seconds for one minute.
