@@ -130,11 +130,14 @@ Confirm the mount before deploying:
 findmnt /mnt/splitmate-postgres
 ```
 
-Give the PostgreSQL container ownership of the new empty mount:
+Create a dedicated data directory below the mount point. This avoids the
+filesystem's `lost+found` directory, which prevents PostgreSQL from
+initializing when the volume root is used directly:
 
 ```bash
+sudo mkdir -p /mnt/splitmate-postgres/data
 docker run --rm \
-  --mount type=bind,source=/mnt/splitmate-postgres,target=/var/lib/postgresql/data \
+  --mount type=bind,source=/mnt/splitmate-postgres/data,target=/var/lib/postgresql/data \
   postgres:16-alpine \
   chown -R postgres:postgres /var/lib/postgresql/data
 ```
